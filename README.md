@@ -1,26 +1,24 @@
-# Nexus Gamer v0.5 — melhorias de voz e transmissão
+# Nexus Gamer Web v0.6 — comunidades e social
 
-Atualização incremental baseada na v0.4. Preserva `server.cjs`, rotas de contas, PostgreSQL, canais e mensagens. **Não apague o banco nem redefina `DATABASE_URL` e `JWT_SECRET`.**
+Atualização incremental da v0.5. Preserva as tabelas existentes e adiciona `friendships` e `direct_messages` automaticamente na inicialização do servidor.
 
-## Novidades
-- Borda verde para participantes que estão falando, usando eventos do LiveKit.
-- Volume individual de participantes remotos, aplicado aos elementos de áudio recebidos.
-- Botão de tela cheia para transmissões recebidas.
-- Seleção de microfone, com cancelamento de eco, supressão de ruído e ganho automático do navegador.
-- Seleção de qualidade de captura de tela (480p/720p/1080p; sujeita às limitações do navegador e da rede).
-- Painel de ajustes dentro da chamada.
+## Recursos
+- Cadastro/login, servidores, convites, chat em tempo real, voz e transmissão via LiveKit (herdados da v0.5).
+- Buscar jogadores por nome, enviar/aceitar/remover solicitações de amizade.
+- Mensagens privadas persistidas no PostgreSQL e entregues por Socket.IO em tempo real.
+- Editar nome do servidor (proprietário), definir cargos de membros (proprietário), remover membros (proprietário/administrador com restrições), excluir canais (proprietário/administrador).
+- Interface escura refinada com janela de amigos, mensagens privadas e gerenciamento.
 
-## Implantação no Render
-1. Faça backup da v0.4 no GitHub.
-2. Extraia este ZIP e envie todos os arquivos para a **raiz** do repositório, substituindo os antigos.
-3. Render Web Service: `npm install && npm run build` e `npm start`.
-4. Mantenha `DATABASE_URL`, `JWT_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` já configuradas. Evite definições conflitantes no serviço e no Environment Group.
-5. Deploy latest commit. Teste com duas contas e fones de ouvido.
+## Deploy no Render
+1. **Faça backup** do repositório e do banco antes de atualizar. A exclusão de canais remove também as mensagens do canal.
+2. Extraia e envie todos os arquivos **na raiz** do repositório, inclusive `SocialPanel.jsx` e `VoiceRoom.jsx`.
+3. Mantenha as variáveis `DATABASE_URL`, `JWT_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` no Web Service.
+4. Build: `npm install && npm run build`; Start: `npm start`.
+5. Verifique os logs, entre com duas contas e teste amizades, DMs e cargos.
 
-## Observações
-- Volume individual só afeta áudio remoto, não a própria voz.
-- Troca de dispositivo de saída de som permanece nas configurações do navegador/sistema.
-- Supressão de ruído depende do navegador/dispositivo, não é processamento dedicado por IA.
-- Resolução solicitada não garante a resolução entregue.
-- Cargos, amigos e mensagens privadas **não** foram adicionados nesta versão; exigem alterações de API e esquema.
-- O pacote foi preparado sem testar uma chamada LiveKit em produção. Se falhar, restaure o commit anterior no GitHub.
+## Limitações e segurança
+- Ainda não há sistema de bloqueio, denúncias, moderação automática, redefinição de senha, verificação de e-mail ou controle de presença online dos amigos.
+- O papel `moderator` está armazenado e visível, mas ainda não recebe ações administrativas específicas. Ações administrativas atuais são de owner/admin conforme as rotas.
+- DMs são persistidas, mas **não** usam criptografia de ponta a ponta.
+- A aplicação não foi validada em produção neste ambiente; teste em staging antes de substituir seu serviço.
+- O PostgreSQL Free do Render expira: planeje backup/migração.
