@@ -41,3 +41,12 @@ Atualização incremental da v0.5. Preserva as tabelas existentes e adiciona `fr
 - Sem alterações no banco de dados ou nas variáveis de ambiente.
 
 Valide voz, compartilhamento e controles em dois navegadores antes de publicar em produção.
+
+## v0.9 — Personalização
+- Configurações do servidor: foto/ícone (PNG/JPEG/WebP até 180 KB), banner (até 420 KB), nome e descrição (até 500 caracteres).
+- Perfil: foto de usuário até 160 KB.
+- As imagens são armazenadas em colunas TEXT do PostgreSQL como data URLs, solução adequada a protótipos e imagens pequenas. Para escala, migrar para object storage (S3/R2).
+- Migração aditiva automática ao iniciar o servidor; nenhuma tabela é apagada.
+- Apenas o dono pode editar a identidade do servidor; cada usuário só pode alterar a própria foto.
+- Faça backup do PostgreSQL antes do deploy. As imagens são validadas por formato, assinatura e tamanho.
+- A compilação Vite não foi validada localmente por indisponibilidade da instalação de dependências; verificar logs de build no Render.
