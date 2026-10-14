@@ -1,4 +1,5 @@
 import BackgroundSettings,{getSavedBackground} from './BackgroundSettings.jsx';
+import './background-settings.css';
 import './customization.css';
 import SocialPanel from './SocialPanel.jsx';
 import VoiceRoom from './VoiceRoom.jsx';
