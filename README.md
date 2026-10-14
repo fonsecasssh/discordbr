@@ -1,29 +1,26 @@
-# Nexus Gamer v0.4 — voz e compartilhamento de tela
+# Nexus Gamer v0.5 — melhorias de voz e transmissão
 
-Atualização baseada na v0.3 enviada pelo usuário. Preserva endpoints, tabelas PostgreSQL, contas, servidores, convites, canais e mensagens. Adiciona integração de salas de voz e compartilhamento de tela via LiveKit (SFU).
+Atualização incremental baseada na v0.4. Preserva `server.cjs`, rotas de contas, PostgreSQL, canais e mensagens. **Não apague o banco nem redefina `DATABASE_URL` e `JWT_SECRET`.**
 
-## Atualização no GitHub e Render
+## Novidades
+- Borda verde para participantes que estão falando, usando eventos do LiveKit.
+- Volume individual de participantes remotos, aplicado aos elementos de áudio recebidos.
+- Botão de tela cheia para transmissões recebidas.
+- Seleção de microfone, com cancelamento de eco, supressão de ruído e ganho automático do navegador.
+- Seleção de qualidade de captura de tela (480p/720p/1080p; sujeita às limitações do navegador e da rede).
+- Painel de ajustes dentro da chamada.
 
-1. Faça backup do repositório atual. Extraia o ZIP e envie TODOS os arquivos para a raiz do mesmo repositório GitHub, substituindo os existentes. Não envie a pasta `node_modules`.
-2. No Render, mantenha o Web Service existente e as variáveis `DATABASE_URL` e `JWT_SECRET`. Não crie outro banco.
-3. Crie um projeto LiveKit Cloud em https://cloud.livekit.io e obtenha WebSocket URL (`wss://...`), API Key e API Secret. Os planos e limites dependem do provedor.
-4. Em Render > discordbr > Environment, adicione:
-   - `LIVEKIT_URL` = URL WebSocket do LiveKit (`wss://...`)
-   - `LIVEKIT_API_KEY` = chave de API
-   - `LIVEKIT_API_SECRET` = segredo da API
-   Nunca publique essas credenciais no GitHub ou envie em prints.
-5. No Render, Build Command: `npm install && npm run build`; Start Command: `npm start`. Faça deploy da última versão.
-6. Teste em duas contas distintas, com dois navegadores ou PCs e fones de ouvido para evitar eco. Acesse o mesmo canal de voz, autorize o microfone, teste silenciar e compartilhar tela.
+## Implantação no Render
+1. Faça backup da v0.4 no GitHub.
+2. Extraia este ZIP e envie todos os arquivos para a **raiz** do repositório, substituindo os antigos.
+3. Render Web Service: `npm install && npm run build` e `npm start`.
+4. Mantenha `DATABASE_URL`, `JWT_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` já configuradas. Evite definições conflitantes no serviço e no Environment Group.
+5. Deploy latest commit. Teste com duas contas e fones de ouvido.
 
-## Arquitetura e segurança
-
-- A API `/api/voice/token` exige JWT de login, valida a participação no servidor e que o canal seja do tipo `voice` antes de emitir um token LiveKit de 2 horas restrito à sala.
-- A mídia passa pelo LiveKit; não pelo PostgreSQL nem pelo Web Service Render. O servidor do Render só emite tokens autorizados.
-- O compartilhamento usa a API de captura do navegador; requer HTTPS e permissão explícita do usuário.
-- Se as três variáveis LIVEKIT não forem configuradas, chat, contas e servidores continuam operando, mas entrar em voz exibe mensagem de configuração.
-- Não há gravação de voz/tela. Não há moderação de transmissões, limites de participantes ou controles de volume por usuário nesta versão.
-- Antes de uso público, implemente rate limiting, verificação de e-mail, recuperação de conta, moderação e testes de carga.
-
-## Testes
-
-Foi feita verificação de sintaxe de `server.cjs`. O build completo não pôde ser executado neste ambiente por indisponibilidade da instalação de dependências. Verifique o resultado do build no Render antes de considerar a atualização validada.
+## Observações
+- Volume individual só afeta áudio remoto, não a própria voz.
+- Troca de dispositivo de saída de som permanece nas configurações do navegador/sistema.
+- Supressão de ruído depende do navegador/dispositivo, não é processamento dedicado por IA.
+- Resolução solicitada não garante a resolução entregue.
+- Cargos, amigos e mensagens privadas **não** foram adicionados nesta versão; exigem alterações de API e esquema.
+- O pacote foi preparado sem testar uma chamada LiveKit em produção. Se falhar, restaure o commit anterior no GitHub.
