@@ -1,0 +1,20 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {Room,RoomEvent,Track} from 'livekit-client';
+import {Mic,MicOff,MonitorUp,MonitorOff,PhoneOff,Volume2} from 'lucide-react';
+
+export default function VoiceRoom({channel,token,onLeave}){
+ const [status,setStatus]=useState('Conectando à sala...'),[room,setRoom]=useState(null),[muted,setMuted]=useState(false),[sharing,setSharing]=useState(false),[people,setPeople]=useState([]),[error,setError]=useState('');
+ const mediaRef=useRef(null),roomRef=useRef(null),localPreview=useRef(null);
+ useEffect(()=>{
+  let cancelled=false;const r=new Room({adaptiveStream:true,dynacast:true});roomRef.current=r;
+  const update=()=>setPeople([r.localParticipant,...Array.from(r.remoteParticipants.values())].map(p=>({id:p.identity,name:p.name||p.identity,local:p===r.localParticipant})));
+  const addTrack=(track,pub,participant)=>{if(cancelled||!mediaRef.current)return;if(track.kind===Track.Kind.Audio){const el=track.attach();el.autoplay=true;el.dataset.track=pub.trackSid||'';mediaRef.current.appendChild(el)}else if(track.kind===Track.Kind.Video){const el=track.attach();el.autoplay=true;el.playsInline=true;el.dataset.track=pub.trackSid||'';el.className='remote-screen';const box=document.createElement('div');box.className='remote-stream';box.dataset.sid=pub.trackSid||'';const title=document.createElement('div');title.textContent=(participant.name||participant.identity)+' está compartilhando a tela';box.append(title,el);mediaRef.current.appendChild(box)}};
+  const removeTrack=(track,pub)=>{track.detach().forEach(el=>el.remove());mediaRef.current?.querySelectorAll('.remote-stream').forEach(el=>{if(el.dataset.sid===pub.trackSid)el.remove()})};
+  r.on(RoomEvent.ParticipantConnected,update).on(RoomEvent.ParticipantDisconnected,update).on(RoomEvent.TrackSubscribed,addTrack).on(RoomEvent.TrackUnsubscribed,removeTrack).on(RoomEvent.Disconnected,()=>setStatus('Desconectado')).on(RoomEvent.LocalTrackUnpublished,()=>setSharing(false));
+  (async()=>{try{const res=await fetch('/api/voice/token',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({channelId:channel.id})});const data=await res.json();if(!res.ok)throw Error(data.error||'Não foi possível entrar na sala');if(cancelled)return;await r.connect(data.url,data.token);if(cancelled)return;setRoom(r);setStatus('Conectado à sala de voz');update();await r.localParticipant.setMicrophoneEnabled(true).catch(()=>{setMuted(true);setError('Microfone bloqueado. Permita o acesso nas configurações do navegador.')})}catch(e){if(!cancelled){setStatus('Falha na conexão');setError(e.message)}}})();
+  return()=>{cancelled=true;r.disconnect();roomRef.current=null;if(mediaRef.current)mediaRef.current.replaceChildren()};
+ },[channel.id,token]);
+ async function toggleMic(){if(!room)return;try{await room.localParticipant.setMicrophoneEnabled(muted);setMuted(!muted);setError('')}catch(e){setError('Não foi possível acessar o microfone: '+e.message)}}
+ async function toggleScreen(){if(!room)return;try{await room.localParticipant.setScreenShareEnabled(!sharing,{audio:false});setSharing(!sharing);setError('')}catch(e){setError('Compartilhamento não iniciado: '+e.message)}}
+ return <div className="voice-room"><div className="voice-header"><Volume2 size={30}/><div><h2>{channel.name}</h2><p>{status}</p></div></div><div className="voice-people">{people.map(p=><div className="voice-person" key={p.id}><div className="avatar">{p.name[0]?.toUpperCase()}</div><strong>{p.name}{p.local?' (você)':''}</strong></div>)}</div><div className="voice-media" ref={mediaRef}/>{error&&<div className="voice-error" role="alert">{error}</div>}<div className="voice-controls"><button disabled={!room} onClick={toggleMic} title={muted?'Ativar microfone':'Silenciar microfone'}>{muted?<MicOff/>:<Mic/>}{muted?'Ativar microfone':'Silenciar'}</button><button disabled={!room} onClick={toggleScreen} title="Compartilhar tela">{sharing?<MonitorOff/>:<MonitorUp/>}{sharing?'Parar transmissão':'Compartilhar tela'}</button><button className="leave-voice" onClick={onLeave}><PhoneOff/> Sair da chamada</button></div></div>
+}

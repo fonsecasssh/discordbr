@@ -2,6 +2,7 @@
 const express=require('express'),http=require('http'),path=require('path'),crypto=require('crypto'),bcrypt=require('bcryptjs'),jwt=require('jsonwebtoken'),{Pool}=require('pg'),{Server}=require('socket.io');
 if(!process.env.DATABASE_URL||!process.env.JWT_SECRET||process.env.JWT_SECRET.length<32){console.error('Configure DATABASE_URL e JWT_SECRET (minimo 32 caracteres).');process.exit(1)}
 const db=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}});
+const {AccessToken}=require('livekit-server-sdk');
 const app=express(),server=http.createServer(app),io=new Server(server);app.disable('x-powered-by');app.use(express.json({limit:'20kb'}));
 const id=()=>crypto.randomUUID(),validName=x=>typeof x==='string'&&x.trim().length>=2&&x.trim().length<=32,validPassword=x=>typeof x==='string'&&x.length>=8&&x.length<=128;
 const token=u=>jwt.sign({sub:u.id},process.env.JWT_SECRET,{expiresIn:'7d',issuer:'nexus-gamer'});
@@ -17,6 +18,18 @@ CREATE TABLE IF NOT EXISTS messages(id UUID PRIMARY KEY,channel_id UUID NOT NULL
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id,created_at DESC);
 `)}
 app.get('/health',(_q,r)=>r.json({ok:true}));
+app.post('/api/voice/token',auth,wrap(async(req,res)=>{
+ const channelId=req.body?.channelId;
+ if(typeof channelId!=='string'||!channelId.match(/^[0-9a-f-]{36}$/i))return res.status(400).json({error:'Canal inválido.'});
+ const q=await db.query('SELECT c.id,c.server_id,u.username FROM channels c JOIN memberships m ON m.server_id=c.server_id JOIN users u ON u.id=m.user_id WHERE c.id=$1 AND m.user_id=$2 AND c.kind=$3',[channelId,req.user.sub,'voice']);
+ if(!q.rows[0])return res.status(403).json({error:'Você não tem acesso a este canal de voz.'});
+ const {LIVEKIT_URL,LIVEKIT_API_KEY,LIVEKIT_API_SECRET}=process.env;
+ if(!LIVEKIT_URL||!LIVEKIT_API_KEY||!LIVEKIT_API_SECRET)return res.status(503).json({error:'Voz ainda não configurada. Configure LIVEKIT_URL, LIVEKIT_API_KEY e LIVEKIT_API_SECRET no Render.'});
+ const at=new AccessToken(LIVEKIT_API_KEY,LIVEKIT_API_SECRET,{identity:req.user.sub,name:q.rows[0].username,ttl:'2h'});
+ at.addGrant({roomJoin:true,room:'nexus-'+q.rows[0].server_id+'-'+channelId,canPublish:true,canSubscribe:true,canPublishData:true});
+ res.json({url:LIVEKIT_URL,token:await at.toJwt()});
+}));
+
 app.post('/api/register',wrap(async(req,res)=>{const {username,email,password}=req.body||{};if(!validName(username)||typeof email!=='string'||!/^\S+@\S+\.\S+$/.test(email)||email.length>255||!validPassword(password))return res.status(400).json({error:'Nome 2–32 caracteres, e-mail válido e senha de pelo menos 8 caracteres.'});const uid=id();try{await db.query('INSERT INTO users(id,username,email,password_hash) VALUES($1,$2,$3,$4)',[uid,username.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12)])}catch(e){if(e.code==='23505')return res.status(409).json({error:'E-mail já cadastrado.'});throw e}res.status(201).json({token:token({id:uid}),user:{id:uid,username:username.trim(),email:email.trim().toLowerCase()}})}));
 app.post('/api/login',wrap(async(req,res)=>{const {email,password}=req.body||{};if(typeof email!=='string'||typeof password!=='string')return res.status(400).json({error:'Dados inválidos.'});const q=await db.query('SELECT * FROM users WHERE email=$1',[email.trim().toLowerCase()]);const u=q.rows[0];if(!u||!(await bcrypt.compare(password,u.password_hash)))return res.status(401).json({error:'E-mail ou senha incorretos.'});res.json({token:token(u),user:{id:u.id,username:u.username,email:u.email}})}));
 app.get('/api/me',auth,wrap(async(req,res)=>{const q=await db.query('SELECT id,username,email FROM users WHERE id=$1',[req.user.sub]);if(!q.rows[0])return res.sendStatus(401);res.json(q.rows[0])}));
