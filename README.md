@@ -22,3 +22,11 @@ Atualização incremental da v0.5. Preserva as tabelas existentes e adiciona `fr
 - DMs são persistidas, mas **não** usam criptografia de ponta a ponta.
 - A aplicação não foi validada em produção neste ambiente; teste em staging antes de substituir seu serviço.
 - O PostgreSQL Free do Render expira: planeje backup/migração.
+
+
+## v0.7 — Nova interface de chamadas
+- Grade responsiva de participantes, avatares grandes, destaque de quem está falando.
+- Barra inferior de controles e botão de desconexão.
+- Transmissão em destaque e modo tela cheia.
+- Controles existentes de microfone, qualidade, volumes e LiveKit preservados.
+- Não altera tabelas, rotas ou variáveis de ambiente.
