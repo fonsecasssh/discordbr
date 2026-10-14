@@ -30,3 +30,14 @@ Atualização incremental da v0.5. Preserva as tabelas existentes e adiciona `fr
 - Transmissão em destaque e modo tela cheia.
 - Controles existentes de microfone, qualidade, volumes e LiveKit preservados.
 - Não altera tabelas, rotas ou variáveis de ambiente.
+
+
+## v0.7.1 — Interface de chamada
+- Barra de controles visível no rodapé sem rolagem, inclusive em telas menores.
+- Tela cheia aplicada à chamada inteira (inclui controles).
+- Cartões maiores, responsivos, com destaque animado para participante falando.
+- Compartilhamento com layout adaptativo e alternância grade/foco.
+- Painel de ajustes sobreposto para não deslocar os controles.
+- Sem alterações no banco de dados ou nas variáveis de ambiente.
+
+Valide voz, compartilhamento e controles em dois navegadores antes de publicar em produção.
