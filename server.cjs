@@ -1,33 +1,33 @@
-const express = require('express');
-const http = require('http');
-const path = require('path');
-const crypto = require('crypto');
-const { Server } = require('socket.io');
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: process.env.CLIENT_ORIGIN || true } });
-const messages = { geral: [{id:'welcome',author:'Sistema',text:'Bem-vindo ao Nexus Gamer! 🎮',time:'Agora'}],clips:[],valorant:[],cs2:[] };
-app.get('/health', (_req,res)=>res.json({ok:true}));
-app.get('/api/channels', (_req,res)=>res.json(Object.keys(messages)));
-io.on('connection', socket => {
-  socket.on('join-channel', channel => {
-    if (!Object.hasOwn(messages,channel)) return;
-    for (const room of socket.rooms) if(room!==socket.id) socket.leave(room);
-    socket.join(channel);
-    socket.emit('history', {channel,items:messages[channel]});
-  });
-  socket.on('send-message', payload => {
-    if (!payload || typeof payload !== 'object') return;
-    const {channel,author,text}=payload;
-    if(!Object.hasOwn(messages,channel) || typeof text!=='string' || !text.trim() || text.length>2000) return;
-    const msg={id:crypto.randomUUID(),author:String(author||'Jogador').slice(0,40),text:text.trim(),time:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
-    messages[channel].push(msg);
-    messages[channel]=messages[channel].slice(-200);
-    io.to(channel).emit('new-message',{channel,message:msg});
-  });
-});
-const dist = path.join(__dirname,'dist');
-app.use(express.static(dist));
-app.get('*', (_req,res)=>res.sendFile(path.join(dist,'index.html')));
-const port = Number(process.env.PORT)||3001;
-server.listen(port,'0.0.0.0',()=>console.log('Nexus Gamer Web running on '+port));
+'use strict';
+const express=require('express'),http=require('http'),path=require('path'),crypto=require('crypto'),bcrypt=require('bcryptjs'),jwt=require('jsonwebtoken'),{Pool}=require('pg'),{Server}=require('socket.io');
+if(!process.env.DATABASE_URL||!process.env.JWT_SECRET||process.env.JWT_SECRET.length<32){console.error('Configure DATABASE_URL e JWT_SECRET (minimo 32 caracteres).');process.exit(1)}
+const db=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}});
+const app=express(),server=http.createServer(app),io=new Server(server);app.disable('x-powered-by');app.use(express.json({limit:'20kb'}));
+const id=()=>crypto.randomUUID(),validName=x=>typeof x==='string'&&x.trim().length>=2&&x.trim().length<=32,validPassword=x=>typeof x==='string'&&x.length>=8&&x.length<=128;
+const token=u=>jwt.sign({sub:u.id},process.env.JWT_SECRET,{expiresIn:'7d',issuer:'nexus-gamer'});
+function auth(req,res,next){try{const h=req.headers.authorization||'';req.user=jwt.verify(h.replace(/^Bearer /,''),process.env.JWT_SECRET,{issuer:'nexus-gamer'});next()}catch{res.status(401).json({error:'Faça login novamente.'})}}
+const wrap=fn=>(req,res)=>Promise.resolve(fn(req,res)).catch(e=>{console.error(e);res.status(500).json({error:'Erro interno. Tente novamente.'})});
+async function membership(userId,serverId){const q=await db.query('SELECT role FROM memberships WHERE user_id=$1 AND server_id=$2',[userId,serverId]);return q.rows[0]}
+async function init(){await db.query(`
+CREATE TABLE IF NOT EXISTS users(id UUID PRIMARY KEY,username VARCHAR(32) NOT NULL, email VARCHAR(255) UNIQUE NOT NULL,password_hash TEXT NOT NULL,created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS servers(id UUID PRIMARY KEY,name VARCHAR(60) NOT NULL,owner_id UUID NOT NULL REFERENCES users(id),invite_code VARCHAR(16) UNIQUE NOT NULL,created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS memberships(user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,role VARCHAR(12) NOT NULL DEFAULT 'member',PRIMARY KEY(user_id,server_id));
+CREATE TABLE IF NOT EXISTS channels(id UUID PRIMARY KEY,server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,name VARCHAR(50) NOT NULL,kind VARCHAR(8) NOT NULL DEFAULT 'text',created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS messages(id UUID PRIMARY KEY,channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,user_id UUID NOT NULL REFERENCES users(id),body VARCHAR(2000) NOT NULL,created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id,created_at DESC);
+`)}
+app.get('/health',(_q,r)=>r.json({ok:true}));
+app.post('/api/register',wrap(async(req,res)=>{const {username,email,password}=req.body||{};if(!validName(username)||typeof email!=='string'||!/^\S+@\S+\.\S+$/.test(email)||email.length>255||!validPassword(password))return res.status(400).json({error:'Nome 2–32 caracteres, e-mail válido e senha de pelo menos 8 caracteres.'});const uid=id();try{await db.query('INSERT INTO users(id,username,email,password_hash) VALUES($1,$2,$3,$4)',[uid,username.trim(),email.trim().toLowerCase(),await bcrypt.hash(password,12)])}catch(e){if(e.code==='23505')return res.status(409).json({error:'E-mail já cadastrado.'});throw e}res.status(201).json({token:token({id:uid}),user:{id:uid,username:username.trim(),email:email.trim().toLowerCase()}})}));
+app.post('/api/login',wrap(async(req,res)=>{const {email,password}=req.body||{};if(typeof email!=='string'||typeof password!=='string')return res.status(400).json({error:'Dados inválidos.'});const q=await db.query('SELECT * FROM users WHERE email=$1',[email.trim().toLowerCase()]);const u=q.rows[0];if(!u||!(await bcrypt.compare(password,u.password_hash)))return res.status(401).json({error:'E-mail ou senha incorretos.'});res.json({token:token(u),user:{id:u.id,username:u.username,email:u.email}})}));
+app.get('/api/me',auth,wrap(async(req,res)=>{const q=await db.query('SELECT id,username,email FROM users WHERE id=$1',[req.user.sub]);if(!q.rows[0])return res.sendStatus(401);res.json(q.rows[0])}));
+app.get('/api/servers',auth,wrap(async(req,res)=>{const q=await db.query('SELECT s.id,s.name,s.invite_code,m.role FROM servers s JOIN memberships m ON s.id=m.server_id WHERE m.user_id=$1 ORDER BY s.created_at',[req.user.sub]);res.json(q.rows)}));
+app.post('/api/servers',auth,wrap(async(req,res)=>{const name=req.body?.name;if(typeof name!=='string'||name.trim().length<2||name.trim().length>60)return res.status(400).json({error:'Nome do servidor: 2 a 60 caracteres.'});const sid=id(),cid=id(),code=crypto.randomBytes(6).toString('hex');const c=await db.connect();try{await c.query('BEGIN');await c.query('INSERT INTO servers(id,name,owner_id,invite_code) VALUES($1,$2,$3,$4)',[sid,name.trim(),req.user.sub,code]);await c.query('INSERT INTO memberships(user_id,server_id,role) VALUES($1,$2,$3)',[req.user.sub,sid,'owner']);await c.query('INSERT INTO channels(id,server_id,name) VALUES($1,$2,$3)',[cid,sid,'geral']);await c.query('COMMIT')}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}res.status(201).json({id:sid,name:name.trim(),invite_code:code,role:'owner'})}));
+app.post('/api/join',auth,wrap(async(req,res)=>{const code=String(req.body?.code||'').trim().toLowerCase();const q=await db.query('SELECT id,name FROM servers WHERE invite_code=$1',[code]);if(!q.rows[0])return res.status(404).json({error:'Convite inválido.'});await db.query('INSERT INTO memberships(user_id,server_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[req.user.sub,q.rows[0].id]);res.json(q.rows[0])}));
+app.get('/api/servers/:sid/channels',auth,wrap(async(req,res)=>{if(!await membership(req.user.sub,req.params.sid))return res.sendStatus(403);const q=await db.query('SELECT id,name,kind FROM channels WHERE server_id=$1 ORDER BY created_at,id',[req.params.sid]);res.json(q.rows)}));
+app.get('/api/servers/:sid/members',auth,wrap(async(req,res)=>{if(!await membership(req.user.sub,req.params.sid))return res.sendStatus(403);const q=await db.query('SELECT u.id,u.username,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.server_id=$1 ORDER BY u.username',[req.params.sid]);res.json(q.rows)}));
+app.post('/api/servers/:sid/channels',auth,wrap(async(req,res)=>{const m=await membership(req.user.sub,req.params.sid);if(!m||!['owner','admin'].includes(m.role))return res.sendStatus(403);const name=req.body?.name,kind=req.body?.kind||'text';if(typeof name!=='string'||!/^[a-z0-9-]{2,50}$/.test(name)||!['text','voice'].includes(kind))return res.status(400).json({error:'Nome: 2–50 caracteres (letras minúsculas, números e hífens).'});const cid=id();await db.query('INSERT INTO channels(id,server_id,name,kind) VALUES($1,$2,$3,$4)',[cid,req.params.sid,name,kind]);io.to('server:'+req.params.sid).emit('channels-changed');res.status(201).json({id:cid,name,kind})}));
+app.get('/api/channels/:cid/messages',auth,wrap(async(req,res)=>{const q=await db.query('SELECT m.id,m.body,m.created_at,u.username AS author FROM messages m JOIN users u ON u.id=m.user_id JOIN channels c ON c.id=m.channel_id JOIN memberships mb ON mb.server_id=c.server_id AND mb.user_id=$2 WHERE m.channel_id=$1 AND c.kind=$3 ORDER BY m.created_at DESC LIMIT 100',[req.params.cid,req.user.sub,'text']);res.json(q.rows.reverse())}));
+io.use((socket,next)=>{try{socket.user=jwt.verify(socket.handshake.auth?.token,process.env.JWT_SECRET,{issuer:'nexus-gamer'});next()}catch{next(new Error('Não autorizado'))}});
+io.on('connection',socket=>{socket.on('join-server',async sid=>{try{if(typeof sid!=='string'||!await membership(socket.user.sub,sid))return;socket.join('server:'+sid)}catch(e){console.error(e)}});socket.on('join-channel',async cid=>{try{const q=await db.query('SELECT c.server_id,c.kind FROM channels c JOIN memberships m ON m.server_id=c.server_id WHERE c.id=$1 AND m.user_id=$2',[cid,socket.user.sub]);if(!q.rows[0]||q.rows[0].kind!=='text')return;for(const room of socket.rooms)if(room.startsWith('channel:'))socket.leave(room);socket.join('channel:'+cid)}catch(e){console.error(e)}});socket.on('send-message',async(data,ack)=>{try{const cid=data?.channelId,body=data?.text;if(typeof cid!=='string'||typeof body!=='string'||!body.trim()||body.length>2000)return ack?.({error:'Mensagem inválida.'});const q=await db.query('SELECT c.id FROM channels c JOIN memberships m ON m.server_id=c.server_id WHERE c.id=$1 AND m.user_id=$2 AND c.kind=$3',[cid,socket.user.sub,'text']);if(!q.rows[0])return ack?.({error:'Sem permissão.'});const mid=id(),r=await db.query('INSERT INTO messages(id,channel_id,user_id,body) VALUES($1,$2,$3,$4) RETURNING created_at',[mid,cid,socket.user.sub,body.trim()]);const u=await db.query('SELECT username FROM users WHERE id=$1',[socket.user.sub]);io.to('channel:'+cid).emit('new-message',{channelId:cid,message:{id:mid,body:body.trim(),author:u.rows[0].username,created_at:r.rows[0].created_at}});ack?.({ok:true})}catch(e){console.error(e);ack?.({error:'Erro ao enviar.'})}})});
+app.use(express.static(path.join(__dirname,'dist')));app.get('*',(_q,r)=>r.sendFile(path.join(__dirname,'dist','index.html')));
+init().then(()=>server.listen(Number(process.env.PORT)||3001,'0.0.0.0',()=>console.log('Nexus Gamer iniciado'))).catch(e=>{console.error('Falha no banco:',e);process.exit(1)});
