@@ -1,36 +1,28 @@
-# Nexus Gamer — MVP 0.1
+# Nexus Gamer Web — versão navegador
 
-Aplicativo desktop Windows para comunidades gamers. Interface React + Electron e servidor Socket.IO.
+Aplicativo web de comunidade gamer com canais de texto e mensagens em tempo real.
 
-## Executar
+## Publicar no Render (sem usar terminal no PC)
+1. Extraia este ZIP e envie os arquivos para um repositório novo no GitHub, mantendo as pastas `src` e `server`.
+2. No Render, selecione **New > Web Service**, conecte o repositório GitHub.
+3. Runtime: **Node**; Build Command: `npm install && npm run build`; Start Command: `npm start`.
+4. Selecione o plano disponível e clique em **Deploy Web Service**.
+5. Ao concluir, abra o endereço `https://...onrender.com` exibido pelo Render.
 
-Instale Node.js 20+ e execute:
+Há também `render.yaml` para implantação por Blueprint.
 
-```bash
-npm install
-npm run server
-```
+## Funcionalidades atuais
+- Interface com canais de texto, nome local do jogador e chat via Socket.IO.
+- Mensagens em tempo real entre usuários conectados à **mesma instância** do servidor.
+- Captura de tela **somente local** (não transmite para outros usuários).
+- Canais de voz são **apenas interface**; não há áudio entre usuários.
 
-Em outro terminal:
+## Limitações importantes
+- Não há autenticação, persistência de mensagens, criação de servidores, permissões ou voz real.
+- Mensagens ficam somente em memória e são perdidas ao reiniciar o servidor.
+- O modo demonstração local permite mensagens no próprio navegador quando a API está offline; não sincroniza com outros usuários.
+- O plano gratuito do Render pode suspender a instância inativa e causar atrasos na reconexão.
+- Para comunidade pública, implementar login, controle de abuso, banco de dados e servidor de mídia antes de liberar amplamente.
 
-```bash
-npm run dev
-```
-
-Para usar a interface apenas no navegador: `npm run web`.
-
-## Gerar instalador Windows
-
-No Windows, execute `npm run build`. O instalador será gerado em `release/`. O ZIP **não contém o .exe compilado**.
-
-## Conectar amigos
-
-Hospede o servidor Node.js com HTTPS e configure `VITE_API_URL` para o endereço público da API antes de compilar o cliente. Configure `CLIENT_ORIGIN` com a origem do frontend web. Para a versão desktop, será necessário revisar a política CORS do servidor.
-
-## Estado das funcionalidades
-
-- Implementado: interface desktop, navegação entre canais, chat local e chat em tempo real via Socket.IO, alteração de apelido, layout responsivo, base Electron.
-- Protótipos locais: alternar microfone/áudio (somente estado da interface), entrada em canais de voz (sem áudio entre usuários), captura de tela local (sem transmissão remota).
-- Ainda não implementado: login seguro, banco persistente, servidores multiusuário reais, autorização, mensagens privadas, moderação, voz WebRTC/LiveKit, streaming remoto, anexos, notificações, pesquisa e convites.
-
-**Atenção:** o backend atual guarda mensagens em memória, não autentica usuários e não deve ser exposto publicamente como serviço de produção. Antes de publicar, implemente autenticação, autorização, limites de requisição, validação e persistência.
+## Rodar localmente (opcional)
+`npm install`, `npm run build`, `npm start`.
