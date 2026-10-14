@@ -1,0 +1,10 @@
+/* Nexus Gamer v1.1: recursos de chamada sem mudanças no backend */
+.discord-call .call-top-right button:disabled,.discord-call .voice-controls button:disabled{opacity:.4;cursor:not-allowed}
+.discord-call .voice-person.is-speaking{box-shadow:0 0 0 2px #34dca744,0 0 28px #24c99d25!important;animation:nexus-speaking-pulse 1.7s ease-in-out infinite}
+@keyframes nexus-speaking-pulse{50%{box-shadow:0 0 0 4px #34dca733,0 0 36px #24c99d40}}
+.discord-call .voice-settings{z-index:15;max-height:min(65vh,520px);overflow-y:auto}
+.discord-call .call-person-volume{z-index:4}
+.discord-call .voice-controls button.control-off{border:1px solid #f17b7855}
+.discord-call .voice-controls button:focus-visible,.discord-call .call-top-right button:focus-visible{outline:2px solid #a995ff;outline-offset:3px}
+@media(max-width:850px){.discord-call .voice-controls{gap:5px}.discord-call .voice-controls button{min-width:48px;padding:8px!important}.discord-call .call-toolbar{padding:8px!important}.discord-call .call-toolbar-end{display:none}}
+@media(prefers-reduced-motion:reduce){.discord-call .voice-person.is-speaking{animation:none}}
